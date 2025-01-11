@@ -1,75 +1,81 @@
+import logging
 from pinecone import Pinecone, ServerlessSpec
 from config import Config
 
+# 设置日志配置
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 def init_pinecone():
-    """
-    初始化 Pinecone 客户端实例并返回。
-    """
-    pc = Pinecone(
-        api_key=Config.PINECONE_API_KEY  # 使用您的 API Key
-    )
-    return pc
+    """初始化 Pinecone 客户端"""
+    try:
+        pc = Pinecone(api_key=Config.PINECONE_API_KEY)
+        logging.info("Initialized Pinecone client successfully.")
+        return pc
+    except Exception as e:
+        logging.error(f"Failed to initialize Pinecone: {e}")
+        raise
 
-
-def create_or_connect_index(index_name, dimension=128):
-    """
-    创建或连接到 Pinecone 索引。
-
-    Args:
-        index_name (str): 索引名称
-        dimension (int): 嵌入向量的维度（默认128）
-    Returns:
-        dict: 已连接的索引的详细信息
-    """
-    pc = init_pinecone()
-
-    # 检查索引是否存在
-    if index_name not in [index.name for index in pc.list_indexes()]:
-        pc.create_index(
-            name=index_name,
-            dimension=dimension,
-            metric="cosine",  # 度量方法
-            spec=ServerlessSpec(
-                cloud="aws",  # 云服务提供商
-                region="us-east-1"  # 区域
+def create_or_connect_index(pinecone_client, index_name, dimension):
+    """创建或连接到 Pinecone 索引"""
+    try:
+        index_list = pinecone_client.list_indexes().names()
+        if index_name not in index_list:
+            pinecone_client.create_index(
+                name=index_name,
+                dimension=dimension,
+                metric="cosine",
+                spec=ServerlessSpec(
+                    cloud="aws",
+                    region=Config.PINECONE_ENV
+                )
             )
-        )
+            logging.info(f"Created new Pinecone index: {index_name}")
+        else:
+            logging.info(f"Index {index_name} already exists.")
+        return pinecone_client.Index(index_name)
+    except Exception as e:
+        logging.error(f"Failed to create or connect to index {index_name}: {e}")
+        raise
 
-    # 获取索引的详细信息
-    return pc.describe_index(index_name)
+def upsert_vectors(pinecone_client, index_name, vectors, batch_size=100):
+    """上传向量到 Pinecone"""
+    try:
+        index = pinecone_client.Index(index_name)
+        for i in range(0, len(vectors), batch_size):
+            batch = vectors[i:i + batch_size]
+            index.upsert(vectors=batch)
+            logging.info(f"Upserted batch {i // batch_size + 1} to Pinecone.")
+        logging.info(f"All {len(vectors)} vectors upserted successfully.")
+    except Exception as e:
+        logging.error(f"Failed to upsert vectors to index {index_name}: {e}")
+        raise
 
+def query_pinecone(pinecone_client, index_name, vector, top_k=1):
+    """查询 Pinecone 索引"""
+    try:
+        print(f"Querying Pinecone index: {index_name}...")
+        index = pinecone_client.Index(index_name)
 
-def upsert_vectors(pc_instance, index_name, embeddings):
-    """
-    插入或更新向量到索引中。
+        # 查询索引
+        results = index.query(vector=vector, top_k=top_k, include_metadata=True)
 
-    Args:
-        pc_instance (Pinecone): Pinecone 客户端实例
-        index_name (str): 索引名称
-        embeddings (list): 包含向量的字典列表，例如:
-                           [{"id": "vector1", "values": [...]}]
-    """
-    index = pc_instance.Index(index_name)
-    index.upsert(vectors=embeddings)
+        # 检查是否有匹配结果
+        if not results or "matches" not in results or len(results["matches"]) == 0:
+            print("No matches found. Possible reasons:")
+            print("1. The vector is not similar to existing vectors in the index.")
+            print("2. The index name is incorrect or does not contain relevant data.")
+            print("3. Pinecone query parameters need adjustment (e.g., top_k).")
+            return None
 
+        # 打印匹配结果
+        print("Pinecone Query Results for Text-to-SQL:")
+        for match in results.get("matches", []):
+            metadata = match.get("metadata", {})
+            question = metadata.get("question", "No question")
+            sql = metadata.get("sql", "No SQL")
+            print(f"ID: {match['id']}, Score: {match['score']}, Question: {question}, SQL: {sql}")
 
-def query_vector(pc_instance, index_name, query_vector, top_k=5):
-    """
-    检索最相似的向量。
-
-    Args:
-        pc_instance (Pinecone): Pinecone 客户端实例
-        index_name (str): 索引名称
-        query_vector (list): 用户查询向量
-        top_k (int): 返回最相似的向量数
-    Returns:
-        list: 匹配结果的列表
-    """
-    index = pc_instance.Index(index_name)
-    response = index.query(
-        vector=query_vector,
-        top_k=top_k,
-        include_metadata=True
-    )
-    return response.get("matches", [])
+        return results
+    except Exception as e:
+        print(f"Error querying Pinecone index: {e}")
+        return None

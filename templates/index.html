@@ -2,14 +2,267 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Text-to-SQL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat Interface with Voice</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Roboto', sans-serif;
+            background: linear-gradient(120deg, #1a2a6c, #b21f1f, #fdbb2d);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            text-shadow: 0px 4px 6px rgba(0, 0, 0, 0.2);
+            color: #fff;
+        }
+
+        .chat-container {
+            width: 90%;
+            max-width: 600px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0px 10px 15px rgba(0, 0, 0, 0.2);
+            height: 70%;
+        }
+
+        .chat-box {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 10px;
+            background: rgba(0, 0, 0, 0.2);
+            box-shadow: inset 0px 5px 10px rgba(0, 0, 0, 0.2);
+            color: #fff;
+            scrollbar-width: thin;
+            scrollbar-color: #4caf50 rgba(255, 255, 255, 0.2);
+        }
+
+        .chat-box::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-box::-webkit-scrollbar-thumb {
+            background-color: #4caf50;
+            border-radius: 10px;
+        }
+
+        .chat-box::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .chat-message {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .chat-message img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .user-message, .ai-message {
+            padding: 10px 15px;
+            border-radius: 15px;
+            max-width: 75%;
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+
+        .user-message {
+            background: #4caf50;
+            color: #fff;
+            align-self: flex-end;
+            text-align: right;
+        }
+
+        .ai-message {
+            background: #2196f3;
+            color: #fff;
+            align-self: flex-start;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .input-container input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            outline: none;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        .input-container input[type="text"]::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .input-container button {
+            padding: 15px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            background: linear-gradient(90deg, #ff8c00, #e52e71);
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .input-container button:hover {
+            transform: scale(1.05);
+            box-shadow: 0px 5px 15px rgba(255, 140, 0, 0.4);
+        }
+
+        .voice-status {
+            margin-top: 10px;
+            text-align: center;
+            font-size: 1rem;
+            color: #fff;
+        }
+    </style>
 </head>
 <body>
-    <h1>Welcome to Text-to-SQL System</h1>
-    <form method="post" action="/query">
-        <label for="query">Enter your question:</label><br>
-        <input type="text" id="query" name="query"><br><br>
-        <button type="submit">Submit</button>
-    </form>
+    <h1>AI Chat Interface with Voice</h1>
+    <div class="chat-container">
+        <div class="chat-box" id="chat-box">
+            <!-- Messages will be appended here -->
+        </div>
+        <div class="input-container">
+            <input type="text" id="query-input" placeholder="Type your question here..." />
+            <button id="voice-button">🎤 Voice</button>
+            <button id="submit-button">Send</button>
+        </div>
+        <div class="voice-status" id="voice-status">Press the 🎤 button to start voice input.</div>
+    </div>
+
+    <script>
+        const submitButton = document.getElementById('submit-button');
+        const voiceButton = document.getElementById('voice-button');
+        const queryInput = document.getElementById('query-input');
+        const chatBox = document.getElementById('chat-box');
+        const voiceStatus = document.getElementById('voice-status');
+
+        const API_ENDPOINT = "http://127.0.0.1:5000/query";
+
+        function appendMessage(text, isUser) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('chat-message', isUser ? 'user-message' : 'ai-message');
+            if (!isUser) {
+                const aiImage = document.createElement('img');
+                aiImage.src = "https://via.placeholder.com/40"; // AI 头像的占位图标
+                aiImage.alt = "AI";
+                messageDiv.prepend(aiImage);
+            }
+            messageDiv.textContent = text;
+            chatBox.appendChild(messageDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function sendQuery(query) {
+            try {
+                const response = await fetch(API_ENDPOINT, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ question: query }),
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                return data.answer;
+            } catch (error) {
+                console.error("Error fetching response:", error);
+                return "Sorry, there was an error processing your request.";
+            }
+        }
+
+        submitButton.addEventListener('click', async () => {
+            const query = queryInput.value.trim();
+            if (!query) {
+                alert('Please enter a message.');
+                return;
+            }
+
+            appendMessage(query, true);
+            queryInput.value = '';
+
+            appendMessage("AI is typing...", false);
+            const aiMessageDiv = chatBox.lastChild;
+
+            const response = await sendQuery(query);
+            aiMessageDiv.remove();
+            appendMessage(response, false);
+        });
+
+        voiceButton.addEventListener('click', () => {
+            voiceStatus.textContent = "Listening... Speak now!";
+            voiceStatus.style.color = "#ff0";
+
+            const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+            recognition.lang = "en-US";
+
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                queryInput.value = transcript;
+                voiceStatus.textContent = "Voice input completed.";
+                voiceStatus.style.color = "#0f0";
+            };
+
+            recognition.onerror = () => {
+                voiceStatus.textContent = "Voice input failed. Please try again.";
+                voiceStatus.style.color = "#f00";
+            };
+
+            recognition.onend = () => {
+                voiceStatus.textContent = "Press the 🎤 button to start voice input.";
+                voiceStatus.style.color = "#fff";
+            };
+
+            recognition.start();
+        });
+
+        queryInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitButton.click();
+            }
+        });
+    </script>
 </body>
 </html>

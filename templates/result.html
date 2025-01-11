@@ -1,10 +1,56 @@
+<!-- templates/result.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+    <meta charset="UTF-8" />
+    <title>Text to SQL - Result</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        .metadata {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+            word-wrap: break-word;
+        }
+        a {
+            color: #007BFF;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .back-link {
+            margin-top: 20px;
+            display: inline-block;
+        }
+    </style>
 </head>
 <body>
-$END$
+<div class="container">
+    <h1>查询结果</h1>
+
+    {% if matches %}
+        <p>检索到 {{ matches|length }} 条结果 (top 1)：</p>
+        {% for match in matches %}
+            <div class="metadata">
+                <p><strong>匹配ID:</strong> {{ match.id }} </p>
+                <p><strong>相似度分数:</strong> {{ match.score }}</p>
+                <p><strong>问题 / 文本:</strong> {{ match.metadata.question }}</p>
+                <p><strong>SQL:</strong> {{ match.metadata.sql }}</p>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p>未找到任何匹配结果。</p>
+    {% endif %}
+
+    <a class="back-link" href="/">返回首页</a>
+</div>
 </body>
 </html>
